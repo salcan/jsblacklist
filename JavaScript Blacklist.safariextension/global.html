@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<body>
+<script type="text/javascript">
+
+// Escapes special characters with backslashes.
+function escape(text) {
+	if (!arguments.callee.escapeRE) {
+		var specials = [ ".", "*", "+", "?", "|", "(", ")", "[", "]", "{", "}", "\\" ];
+		arguments.callee.escapeRE = new RegExp( "(\\" + specials.join("|\\") + ")", "g" );
+	}
+	return text.replace(arguments.callee.escapeRE, "\\$1");
+}
+
+// Rebuild the blacklist from the settings. This is triggered automatically the first
+// time the script runs, and via a listener when the user modifies the settings.
+function rebuildBlacklist() {
+	var str = safari.extension.settings.getItem("javascriptBlacklist");
+	var sites = str.split(/ *, */);
+	var re;
+	while (sites.indexOf("") != -1) // remove blank entries
+		sites.splice(sites.indexOf(""),1);
+	if (sites.length <= 0) {
+		re = new RegExp("$^"); // a RegExp that never matches
+	} else {
+		for (var i=0; i<sites.length; i++) {
+			sites[i] = escape(sites[i]);
+		}
+		re = new RegExp("[./](" + sites.join("|") + ")/", "i");
+	}
+	
+	console.log("script blacklist regex: " + re.source);
+	document.blacklistRE = re;
+}
+
+// Cache the RegExp object in this document for speed.
+function getBlacklistRE() {
+	if (!document.blacklistRE) {
+		rebuildBlacklist();
+	}
+	return document.blacklistRE;
+}
+
+// Handle configuration change messages from Safari.
+function changeListener(event) {
+	if (event.key === "javascriptBlacklist") {
+		rebuildBlacklist();
+	}
+}
+
+// -------------------------------------------------
+
+// Returns true if the URL is allowed to load.
+function allowedToLoad(url, nodeName) {
+	if (nodeName === "SCRIPT") {
+		var blacklistRE = getBlacklistRE();
+		if (url.search(blacklistRE) != -1) {
+			return false;
+		}
+	}
+	return true;
+}
+
+// Handles canLoad messages from injected.js
+function messageListener(event) {
+	if (event.name === "canLoad") {
+		var url = event.message[0];
+		var nodeName = event.message[1];
+		if (allowedToLoad(url, nodeName)) {
+			event.message = "allow";
+		} else {
+			console.log("blocking script: " + url );
+			event.message = "block";
+		}
+	}
+}
+
+// -------------------------------------------------
+
+// Installs our event listeners.
+safari.application.addEventListener("message", messageListener, true);
+safari.extension.settings.addEventListener("change", changeListener, false);
+
+</script>
+</body >
+</html>
