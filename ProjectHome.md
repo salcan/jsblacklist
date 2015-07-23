@@ -1,0 +1,1 @@
+This is the new home for the JavaScript Blacklist extension for Safari, since Apple deleted its original home.
